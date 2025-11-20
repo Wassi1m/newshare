@@ -1,0 +1,489 @@
+// Schéma Prisma pour SQLite - Version simplifiée
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============= AUTHENTIFICATION =============
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  password      String?
+  image         String?
+  role          UserRole  @default(USER)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  profile       UserProfile?
+  files         File[]
+  folders       Folder[]
+  shares        Share[]
+  comments      Comment[]
+  notifications Notification[]
+  apiKeys       ApiKey[]
+  webhooks      Webhook[]
+  auditLogs     AuditLog[]
+  teamMembers   TeamMember[]
+  ownedTeams    Team[]          @relation("TeamOwner")
+  subscription  Subscription?
+  downloads     Download[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  PREMIUM
+  MODERATOR
+  ADMIN
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model UserProfile {
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  bio      String?
+  phone    String?
+  website  String?
+  location String?
+
+  // Préférences (stockées en JSON)
+  preferences String @default("{}")
+  
+  // Statistiques
+  totalFiles      Int @default(0)
+  totalStorage    Int @default(0)
+  filesShared     Int @default(0)
+  scansPerformed  Int @default(0)
+  threatsDetected Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+// ============= FICHIERS =============
+
+model File {
+  id           String     @id @default(cuid())
+  name         String
+  originalName String
+  size         Int
+  mimeType     String
+  extension    String
+  url          String
+  thumbnailUrl String?
+  hash         String     @unique
+  status       FileStatus @default(READY)
+
+  userId   String
+  folderId String?
+
+  tags     String @default("[]") // Stocké comme JSON array string
+  metadata String @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder       Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  scanResults  ScanResult[]
+  versions     FileVersion[]
+  shares       Share[]
+  comments     Comment[]
+  quarantine   Quarantine?
+  downloads    Download[]
+
+  @@map("files")
+}
+
+enum FileStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  QUARANTINED
+  DELETED
+}
+
+model Folder {
+  id       String  @id @default(cuid())
+  name     String
+  parentId String?
+  userId   String
+  color    String?
+  icon     String?
+  isShared Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent Folder?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children Folder[] @relation("FolderHierarchy")
+  files  File[]
+  shares Share[]
+
+  @@map("folders")
+}
+
+model FileVersion {
+  id        String   @id @default(cuid())
+  fileId    String
+  version   Int
+  url       String
+  size      Int
+  hash      String
+  createdBy String
+  
+  createdAt DateTime @default(now())
+
+  file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([fileId, version])
+  @@map("file_versions")
+}
+
+// ============= SÉCURITÉ & SCAN =============
+
+model ScanResult {
+  id          String     @id @default(cuid())
+  fileId      String
+  status      ScanStatus @default(PENDING)
+  isMalware   Boolean    @default(false)
+  confidence  Float      @default(0)
+  riskScore   Int        @default(0)
+  threatLevel ThreatLevel @default(SAFE)
+  threatType  String?
+  threatFamily String?
+  
+  modelVersion    String
+  features        String @default("{}")
+  explanation     String? @default("{}")
+  processingTime  Int   @default(0)
+  
+  scanDate DateTime @default(now())
+
+  file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("scan_results")
+}
+
+enum ScanStatus {
+  PENDING
+  SCANNING
+  COMPLETED
+  FAILED
+}
+
+enum ThreatLevel {
+  SAFE
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Quarantine {
+  id       String   @id @default(cuid())
+  fileId   String   @unique
+  reason   String
+  reviewed Boolean  @default(false)
+  approved Boolean?
+  reviewedBy String?
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("quarantine")
+}
+
+// ============= PARTAGE =============
+
+model Share {
+  id        String   @id @default(cuid())
+  fileId    String?
+  folderId  String?
+  createdBy String
+  
+  sharedWith    String @default("[]") // JSON array
+  linkToken     String   @unique
+  password      String?
+  expiresAt     DateTime?
+  maxDownloads  Int?
+  downloadCount Int      @default(0)
+  
+  permissions   String @default("[]") // JSON array
+  isPublic      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User       @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  file      File?      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  folder    Folder?    @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  downloads Download[]
+
+  @@map("shares")
+}
+
+model Download {
+  id        String   @id @default(cuid())
+  shareId   String
+  fileId    String
+  userId    String?
+  ipAddress String
+  userAgent String
+
+  downloadedAt DateTime @default(now())
+
+  share Share @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  file  File  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("downloads")
+}
+
+// ============= COMMENTAIRES =============
+
+model Comment {
+  id       String  @id @default(cuid())
+  fileId   String
+  userId   String
+  content  String
+  parentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  file    File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
+
+  @@map("comments")
+}
+
+// ============= NOTIFICATIONS =============
+
+model Notification {
+  id      String           @id @default(cuid())
+  userId  String
+  type    NotificationType
+  title   String
+  message String
+  data    String? // JSON
+  isRead  Boolean          @default(false)
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  FILE_UPLOADED
+  FILE_SHARED
+  SCAN_COMPLETED
+  THREAT_DETECTED
+  COMMENT_ADDED
+  TEAM_INVITATION
+  STORAGE_WARNING
+  SYSTEM_ALERT
+}
+
+// ============= ÉQUIPES =============
+
+model Team {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  avatar      String?
+  ownerId     String
+
+  storageUsed   Int @default(0)
+  storageLimit  Int
+  filesCount    Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner   User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members TeamMember[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id          String       @id @default(cuid())
+  teamId      String
+  userId      String
+  role        TeamRole     @default(MEMBER)
+  permissions String @default("[]") // JSON array
+
+  joinedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ============= ABONNEMENTS =============
+
+model Subscription {
+  id     String           @id @default(cuid())
+  userId String           @unique
+  plan   SubscriptionPlan @default(FREE)
+  status SubscriptionStatus @default(ACTIVE)
+
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean  @default(false)
+
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionPlan {
+  FREE
+  PREMIUM
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  EXPIRED
+}
+
+// ============= API & INTÉGRATIONS =============
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  key         String   @unique
+  lastUsed    DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean  @default(true)
+  permissions String @default("[]") // JSON array
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model Webhook {
+  id             String   @id @default(cuid())
+  userId         String
+  url            String
+  events         String @default("[]") // JSON array
+  secret         String
+  isActive       Boolean  @default(true)
+  lastTriggered  DateTime?
+  failureCount   Int      @default(0)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("webhooks")
+}
+
+// ============= AUDIT & LOGS =============
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String
+  action       String
+  resourceType String
+  resourceId   String
+  metadata     String @default("{}") // JSON
+  ipAddress    String
+  userAgent    String
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("audit_logs")
+}
+
