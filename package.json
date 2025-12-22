@@ -1,4 +1,10 @@
-{
+cd ~/newshare
+
+# Vérifier que le fichier .env existe
+cat .env
+
+# Faire le build de production
+npm run build{
   "name": "exchange_platform",
   "version": "0.1.0",
   "private": true,

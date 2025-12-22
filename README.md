@@ -269,8 +269,35 @@ Pour toute question sur le projet, consultez la documentation ou le fichier PROG
 
 ---
 
-**Version** : 0.1.0  
-**Last Updated** : Octobre 2025
-# app-sahre
-# app-sahre
-# newshare
+## 🚀 Déploiement sur AWS EC2
+
+**✅ DÉPLOYÉ ET FONCTIONNEL**
+
+- **URL de Production** : http://13.60.214.119:3000
+- **Serveur** : Amazon Linux 2023 sur AWS EC2
+- **Mode** : Développement (Next.js 16.0.0 avec Turbopack)
+- **Gestionnaire** : PM2 (redémarrage automatique)
+- **Base de données** : SQLite (~/newshare/prisma/dev.db)
+
+### Commandes de Gestion
+
+**Connexion SSH :**
+```bash
+ssh -i ~/Téléchargements/wassim.pem ec2-user@13.60.214.119
+```
+
+**Gérer l'application :**
+```bash
+cd ~/newshare
+pm2 status              # Voir l'état
+pm2 logs newshare       # Voir les logs
+pm2 restart newshare    # Redémarrer
+```
+
+**📖 Documentation complète** : Voir `DEPLOIEMENT_COMPLET.md`
+
+---
+
+**Version** : 1.0.0  
+**Last Updated** : 22 Décembre 2025  
+**Statut** : ✅ En Production
