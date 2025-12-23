@@ -20,25 +20,31 @@ model User {
   image         String?
   role          UserRole  @default(USER)
   
+  // Sécurité et bannissement
+  isBanned      Boolean   @default(false)
+  bannedAt      DateTime?
+  bannedReason  String?
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  accounts      Account[]
-  sessions      Session[]
-  profile       UserProfile?
-  files         File[]
-  folders       Folder[]
-  shares        Share[]
-  comments      Comment[]
-  notifications Notification[]
-  apiKeys       ApiKey[]
-  webhooks      Webhook[]
-  auditLogs     AuditLog[]
-  teamMembers   TeamMember[]
-  ownedTeams    Team[]          @relation("TeamOwner")
-  subscription  Subscription?
-  downloads     Download[]
+  accounts         Account[]
+  sessions         Session[]
+  profile          UserProfile?
+  files            File[]
+  folders          Folder[]
+  shares           Share[]
+  comments         Comment[]
+  notifications    Notification[]
+  apiKeys          ApiKey[]
+  webhooks         Webhook[]
+  auditLogs        AuditLog[]
+  teamMembers      TeamMember[]
+  ownedTeams       Team[]          @relation("TeamOwner")
+  subscription     Subscription?
+  downloads        Download[]
+  malwareAttempts  MalwareAttempt[]
 
   @@map("users")
 }
@@ -489,5 +495,30 @@ model AuditLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("audit_logs")
+}
+
+model MalwareAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  fileName      String
+  fileSize      Int
+  fileHash      String
+  mimeType      String
+  
+  confidence    Float
+  threatLevel   String
+  scanResult    String   // JSON du résultat complet
+  
+  actionTaken   String   // "banned", "warned", "blocked"
+  ipAddress     String?
+  userAgent     String?
+  
+  createdAt DateTime @default(now())
+  
+  @@map("malware_attempts")
+  @@index([userId])
+  @@index([createdAt])
 }
 
