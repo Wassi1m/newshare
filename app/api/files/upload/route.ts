@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
         await prisma.notification.create({
           data: {
             userId: session.user.id,
-            type: "SECURITY_ALERT",
+            type: "THREAT_DETECTED",
             title: "🚨 Compte banni - Malware détecté",
             message: `Votre compte a été automatiquement banni suite à la détection d'un fichier malveillant: ${file.name}`,
             isRead: false,
