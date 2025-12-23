@@ -176,3 +176,4 @@ ls -t "$BACKUP_DIR"/dev.db.* 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null
 echo "✅ Backups nettoyés (10 derniers conservés)"
 echo ""
 
+

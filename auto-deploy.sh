@@ -55,3 +55,4 @@ PUBLIC_IP=$(curl -s --max-time 3 http://169.254.169.254/latest/meta-data/public-
 echo "🌐 http://${PUBLIC_IP}:3000"
 echo "📋 Logs : pm2 logs newshare"
 
+
