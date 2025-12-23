@@ -132,11 +132,12 @@ export async function POST(request: NextRequest) {
       const isMalware = scanResult.result.is_malware;
       const confidence = scanResult.result.confidence;
 
-      console.log(`📊 Résultat: ${isMalware ? '🚨 MALWARE' : '✅ CLEAN'} (confidence: ${(confidence * 100).toFixed(2)}%)`);
+      const riskScore = confidence * 100; // Score de risque sur 100
+      console.log(`📊 Résultat: ${isMalware ? '🚨 MALWARE' : '✅ CLEAN'} (confidence: ${confidence.toFixed(2)}, score de risque: ${riskScore.toFixed(0)}/100)`);
 
-      // Si un malware est détecté avec une confiance >= 85% → BANNIR
-      if (isMalware && confidence >= 0.85) {
-        const threatLevel = confidence >= 0.9 ? 'critical' : 'high';
+      // Si un malware est détecté avec un score de risque >= 85 → BANNIR
+      if (isMalware && riskScore >= 85) {
+        const threatLevel = riskScore >= 90 ? 'critical' : 'high';
 
         // Enregistrer la tentative de malware
         await prisma.malwareAttempt.create({
@@ -161,7 +162,7 @@ export async function POST(request: NextRequest) {
           data: {
             isBanned: true,
             bannedAt: new Date(),
-            bannedReason: `Tentative d'upload de malware détecté: ${file.name} (confiance: ${(confidence * 100).toFixed(2)}%)`,
+            bannedReason: `Tentative d'upload de malware détecté: ${file.name} (score de risque: ${riskScore.toFixed(0)}/100)`,
           },
         });
 
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        console.log(`🔨 Utilisateur ${session.user.email} BANNI pour upload de malware (confiance: ${(confidence * 100).toFixed(2)}%)`);
+        console.log(`🔨 Utilisateur ${session.user.email} BANNI pour upload de malware (score de risque: ${riskScore.toFixed(0)}/100)`);
 
         // NE PAS SAUVEGARDER LE FICHIER - Retourner une erreur
         return NextResponse.json(
@@ -191,7 +192,7 @@ export async function POST(request: NextRequest) {
             details: {
               fileName: file.name,
               threatLevel: threatLevel.toUpperCase(),
-              confidence: `${(confidence * 100).toFixed(2)}%`,
+              riskScore: `${riskScore.toFixed(0)}/100`,
               action: "COMPTE BANNI",
             },
             banned: true,
@@ -200,9 +201,9 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Si confiance < 85%, on continue l'upload normalement (même si détecté comme malware)
+      // Si score de risque < 85, on continue l'upload normalement (même si détecté comme malware)
       // Le fichier sera accepté
-      console.log(`✅ Fichier accepté: ${file.name} (confiance malware: ${(confidence * 100).toFixed(2)}% - sous le seuil de 85%)`);
+      console.log(`✅ Fichier accepté: ${file.name} (score de risque: ${riskScore.toFixed(0)}/100 - sous le seuil de 85)`);
     } else {
       // Si le scan a échoué, enregistrer l'erreur mais continuer
       console.warn(`⚠️ Échec du scan de malware pour ${file.name}:`, scanResult.error);
