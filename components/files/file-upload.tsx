@@ -121,6 +121,9 @@ export function FileUpload() {
       'text/*': ['.txt', '.csv', '.md'],
       'application/zip': ['.zip'],
       'application/x-rar-compressed': ['.rar'],
+      // Fichiers exécutables (pour scan de malware)
+      'application/x-msdownload': ['.exe', '.dll', '.bat', '.cmd'],
+      'application/x-executable': ['.exe'],
       // Et accepter tous les autres types
       '*/*': [],
     },

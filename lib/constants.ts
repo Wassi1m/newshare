@@ -28,6 +28,7 @@ export const ALLOWED_FILE_TYPES = {
   PRESENTATIONS: ['ppt', 'pptx', 'odp'],
   ARCHIVES: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'],
   CODE: ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'cs', 'php', 'rb', 'go', 'rs', 'html', 'css'],
+  EXECUTABLES: ['exe', 'dll', 'bat', 'cmd', 'msi', 'app', 'deb', 'rpm'], // Pour scan de malware
 };
 
 export const ALL_ALLOWED_EXTENSIONS = Object.values(ALLOWED_FILE_TYPES).flat();
