@@ -134,11 +134,9 @@ export async function POST(request: NextRequest) {
 
       console.log(`📊 Résultat: ${isMalware ? '🚨 MALWARE' : '✅ CLEAN'} (confidence: ${(confidence * 100).toFixed(2)}%)`);
 
-      // Si un malware est détecté avec une confiance >= 50%
-      if (isMalware && confidence >= 0.5) {
-        const threatLevel = confidence >= 0.9 ? 'critical' : 
-                           confidence >= 0.7 ? 'high' : 
-                           confidence >= 0.5 ? 'medium' : 'low';
+      // Si un malware est détecté avec une confiance >= 85% → BANNIR
+      if (isMalware && confidence >= 0.85) {
+        const threatLevel = confidence >= 0.9 ? 'critical' : 'high';
 
         // Enregistrer la tentative de malware
         await prisma.malwareAttempt.create({
@@ -183,7 +181,7 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        console.log(`🔨 Utilisateur ${session.user.email} BANNI pour upload de malware`);
+        console.log(`🔨 Utilisateur ${session.user.email} BANNI pour upload de malware (confiance: ${(confidence * 100).toFixed(2)}%)`);
 
         // NE PAS SAUVEGARDER LE FICHIER - Retourner une erreur
         return NextResponse.json(
@@ -197,6 +195,61 @@ export async function POST(request: NextRequest) {
               action: "COMPTE BANNI",
             },
             banned: true,
+          },
+          { status: 403 }
+        );
+      }
+
+      // Si malware détecté avec confiance entre 50% et 85% → BLOQUER sans bannir
+      if (isMalware && confidence >= 0.5 && confidence < 0.85) {
+        const threatLevel = confidence >= 0.7 ? 'high' : 'medium';
+
+        // Enregistrer la tentative de malware
+        await prisma.malwareAttempt.create({
+          data: {
+            userId: session.user.id,
+            fileName: file.name,
+            fileSize: file.size,
+            fileHash: hash,
+            mimeType: file.type,
+            confidence,
+            threatLevel,
+            scanResult: JSON.stringify(scanResult.result),
+            actionTaken: 'blocked',
+            ipAddress,
+            userAgent,
+          },
+        });
+
+        console.log(`⚠️ Fichier suspect bloqué: ${file.name} (confiance: ${(confidence * 100).toFixed(2)}%) - utilisateur NON banni`);
+
+        // Créer une notification d'alerte
+        await prisma.notification.create({
+          data: {
+            userId: session.user.id,
+            type: "THREAT_DETECTED",
+            title: "⚠️ Fichier suspect bloqué",
+            message: `Le fichier "${file.name}" a été détecté comme potentiellement malveillant et a été bloqué.`,
+            isRead: false,
+            data: JSON.stringify({ 
+              fileHash: hash,
+              confidence,
+              threatLevel,
+            }),
+          },
+        });
+
+        // NE PAS SAUVEGARDER LE FICHIER - Retourner une erreur
+        return NextResponse.json(
+          { 
+            error: "⚠️ FICHIER SUSPECT BLOQUÉ",
+            message: `Le fichier "${file.name}" a été détecté comme potentiellement malveillant et a été bloqué par sécurité.`,
+            details: {
+              fileName: file.name,
+              threatLevel: threatLevel.toUpperCase(),
+              confidence: `${(confidence * 100).toFixed(2)}%`,
+              action: "FICHIER BLOQUÉ",
+            },
           },
           { status: 403 }
         );
